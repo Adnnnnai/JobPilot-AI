@@ -1,17 +1,27 @@
 # Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
-
-# Virtual environment
 venv/
-.venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+.next/
 
 # Environment
 .env
 
 # IDE
-.vscode/
 .idea/
+.vscode/
+
+# Logs
+*.log
+
+# Upload
+uploads/*
+
+# Chroma
+chroma_db/
+
+# Database
+*.db
