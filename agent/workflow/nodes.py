@@ -121,7 +121,7 @@ def supervisor_node(state):
 # ── Browser Node ─────────────────────────────
 
 def browser_search_node(state):
-    """抓取 JD：从招聘网站搜索岗位"""
+    """抓取 JD：从招聘网站搜索岗位，只做采集和存储，不做分析"""
     from tools.browser_tools import BrowserSearchTool
 
     keyword = state.get("jd", state.get("message", ""))
@@ -129,6 +129,10 @@ def browser_search_node(state):
     result = tool.run(keyword)
     state["jd"] = result
     state["current_agent"] = "browser_search"
+
+    from workflow.browser_worker import index_jd_to_knowledge
+    state = index_jd_to_knowledge(state)
+
     return state
 
 

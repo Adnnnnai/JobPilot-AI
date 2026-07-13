@@ -1,0 +1,17 @@
+"""统一错误码"""
+
+E_RESUME_PARSE = 10001
+E_LLM_SERVICE = 10002
+E_RAG_SEARCH = 10003
+E_MEMORY_ERROR = 10004
+E_BROWSER_ERROR = 10005
+E_RATE_LIMIT = 10006
+
+ERROR_MESSAGES = {
+    E_RESUME_PARSE: "简历解析失败",
+    E_LLM_SERVICE: "LLM服务异常",
+    E_RAG_SEARCH: "知识库检索失败",
+    E_MEMORY_ERROR: "记忆服务异常",
+    E_BROWSER_ERROR: "浏览器操作失败",
+    E_RATE_LIMIT: "请求过于频繁",
+}

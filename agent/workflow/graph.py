@@ -122,11 +122,12 @@ builder.add_edge("planner", "supervisor")
 builder.add_conditional_edges("supervisor", route_from_supervisor, {
     "resume_worker": "resume_worker", "jd_worker": "jd_worker",
     "rewrite_plan": "rewrite_plan", "interview_worker": "interview_worker",
+    "browser_search": "browser_search",
     "filesystem": "filesystem", "github": "github",
     "END": END,
 })
 
-for w in ["resume_worker", "jd_worker", "interview_worker", "filesystem", "github"]:
+for w in ["resume_worker", "jd_worker", "interview_worker", "browser_search", "filesystem", "github"]:
     builder.add_edge(w, "task_complete")
 
 builder.add_conditional_edges("rewrite_plan", route_after_plan, {
@@ -142,6 +143,7 @@ builder.add_conditional_edges("task_complete", route_after_task_complete, {
 builder.add_conditional_edges("task_router", route_from_task_router, {
     "resume_worker": "resume_worker", "jd_worker": "jd_worker",
     "rewrite_plan": "rewrite_plan", "interview_worker": "interview_worker",
+    "browser_search": "browser_search",
     "filesystem": "filesystem", "github": "github",
     "END": END,
 })

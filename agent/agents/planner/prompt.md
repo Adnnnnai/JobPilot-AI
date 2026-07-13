@@ -9,6 +9,7 @@
 - jd_agent       : 分析岗位要求、技能匹配
 - rewrite_agent  : 优化简历
 - interview_agent: 生成面试题、面试建议
+- browser_agent  : 搜索岗位JD、采集招聘信息
 
 输出格式：
 {
@@ -23,6 +24,8 @@
 规则：
 - 根据用户偏好(Preferences)调整任务：如果用户设置了 avoid_skill，请告知 jd_agent 过滤
 - 根据用户画像(Profile)调整任务：使用 target_job 作为默认岗位
+- 用户提到"搜索/找/查/浏览"某个岗位时，需要 browser_agent（采集JD）
+- browser_agent 必须在 jd_agent 之前（先采集再分析）
 - id 从 1 递增，每个 Agent 一次任务只生成一个
 - depends 是依赖的任务 id 列表，无依赖则为 []
 - resume_agent 和 jd_agent 无相互依赖（可并行）
