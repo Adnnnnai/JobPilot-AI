@@ -25,6 +25,7 @@ from workflow.nodes import (
     rewrite_plan_node,
     rewrite_execute_node,
     interview_worker_node,
+    browser_search_node,
     filesystem_node,
     github_node
 )
@@ -100,6 +101,7 @@ builder.add_node("jd_worker", jd_worker_node)
 builder.add_node("rewrite_plan", rewrite_plan_node)
 builder.add_node("rewrite_execute", rewrite_execute_node)
 builder.add_node("interview_worker", interview_worker_node)
+builder.add_node("browser_search", browser_search_node)
 builder.add_node("filesystem", filesystem_node)
 builder.add_node("github", github_node)
 

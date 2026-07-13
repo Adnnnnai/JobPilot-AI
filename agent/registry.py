@@ -11,6 +11,8 @@ from tools.mcp_file_tools import MCPReadFileTool
 from tools.mcp_file_tools import MCPListDirectoryTool
 from tools.external_tools import GitHubTool
 from tools.external_tools import BrowserTool
+from tools.browser_tools import BrowserSearchTool
+from tools.browser_tools import BrowserFetchTool
 
 TOOLS = {
     "resume": ResumeTool(),
@@ -26,6 +28,8 @@ TOOLS = {
     "mcp_list_directory": MCPListDirectoryTool(),
     "github": GitHubTool(),
     "browser": BrowserTool(),
+    "browser_search": BrowserSearchTool(),
+    "browser_fetch": BrowserFetchTool(),
 }
 
 # LangChain Tool 格式：供 LLM Tool Calling 使用

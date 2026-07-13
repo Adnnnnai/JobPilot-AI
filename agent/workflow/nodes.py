@@ -118,10 +118,18 @@ def supervisor_node(state):
     return state
 
 
-def route_from_supervisor(state):
-    """供 graph 条件路由使用，返回字符串而非 state dict"""
-    supervisor = SupervisorAgent()
-    return supervisor.route(state)
+# ── Browser Node ─────────────────────────────
+
+def browser_search_node(state):
+    """抓取 JD：从招聘网站搜索岗位"""
+    from tools.browser_tools import BrowserSearchTool
+
+    keyword = state.get("jd", state.get("message", ""))
+    tool = BrowserSearchTool()
+    result = tool.run(keyword)
+    state["jd"] = result
+    state["current_agent"] = "browser_search"
+    return state
 
 
 # ── Worker Nodes ─────────────────────────────

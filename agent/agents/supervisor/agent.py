@@ -11,6 +11,7 @@ AGENT_ROUTE_MAP = {
     "jd_agent": "jd_worker",
     "rewrite_agent": "rewrite_plan",
     "interview_agent": "interview_worker",
+    "browser_agent": "browser_search",
     "filesystem_agent": "filesystem",
     "github_agent": "github",
 }
