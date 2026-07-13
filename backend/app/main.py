@@ -11,6 +11,7 @@ from app.models.rewrite_record import RewriteRecord
 from app.models.memory import UserProfile
 from app.models.memory import UserPreference
 from app.models.memory import ExperienceRecord
+from app.models.job_description import JobDescription
 
 # 导入路由
 from app.api.v1.auth import router as auth_router

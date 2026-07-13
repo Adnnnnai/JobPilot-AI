@@ -5,6 +5,7 @@ Browser Tool
   BrowserService  → 浏览器操作（打开页面、搜索）
   JDExtractor     → HTML → 结构化 JSON
   JDGenerator     → LLM 兜底生成 JD
+  JDWriter        → 写入 PostgreSQL
 """
 import json
 
@@ -13,12 +14,13 @@ from .browser.browser_service import BrowserService
 
 from app.services.jd_extractor import JDExtractor
 from app.services.jd_generator import JDGenerator
+from app.services.jd_writer import JDWriter
 
 
 class BrowserSearchTool(BaseTool):
 
     name = "browser_search"
-    description = "搜索岗位JD：浏览器抓取 + LLM 解析为结构化 JSON"
+    description = "搜索岗位JD：浏览器抓取 + LLM 解析为结构化 JSON + 保存到数据库"
 
     def run(self, keyword: str, site: str = "indeed") -> str:
         # 1. BrowserService: 浏览器抓取
@@ -28,10 +30,16 @@ class BrowserSearchTool(BaseTool):
         if html_text and len(html_text) > 200:
             jd = JDExtractor.extract(html_text)
             if jd.get("title"):
+                jd["keywords"] = keyword
+                jd["source"] = site
+                JDWriter.save(jd)
                 return json.dumps(jd, ensure_ascii=False, indent=2)
 
         # 3. JDGenerator: LLM 兜底
         jd = JDGenerator.generate(keyword)
+        jd["keywords"] = keyword
+        jd["source"] = "llm_generated"
+        JDWriter.save(jd)
         return json.dumps(jd, ensure_ascii=False, indent=2)
 
 
