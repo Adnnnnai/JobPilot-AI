@@ -1,24 +1,20 @@
 """
-Browser Manager
+BrowserService
 
-基于 Playwright + 本地 Chrome，封装为 Agent 调用的统一浏览器工具。
-
-JD 来源策略：
-  1. 优先通过浏览器抓取 JD
-  2. 如果页面需要登录，回退到 LLM 内置知识生成 JD 模板
+负责浏览器操作。不包含 AI 逻辑。
 """
 from playwright.sync_api import sync_playwright
 
 CHROME_PATH = "C:/Program Files/Google/Chrome/Application/chrome.exe"
 
 
-class BrowserManager:
+class BrowserService:
 
     _playwright = None
     _browser = None
 
     @classmethod
-    def get_browser(cls, headless: bool = True):
+    def _get_browser(cls, headless: bool = True):
         if cls._browser is None or not cls._browser.is_connected():
             cls._playwright = sync_playwright().start()
             cls._browser = cls._playwright.chromium.launch(
@@ -33,7 +29,7 @@ class BrowserManager:
 
     @classmethod
     def _new_page(cls):
-        browser = cls.get_browser(headless=True)
+        browser = cls._get_browser(headless=True)
         page = browser.new_page()
         page.set_extra_http_headers({
             "User-Agent": (
@@ -44,25 +40,29 @@ class BrowserManager:
         })
         return page
 
+    # ── Public API ─────────────────────────────
+
     @classmethod
-    def fetch_text(cls, url: str, timeout: int = 30000) -> str:
+    def open(cls, url: str, timeout: int = 30000) -> str:
+        """打开页面，返回 body 文本"""
         page = cls._new_page()
         try:
             page.goto(url, timeout=timeout, wait_until="domcontentloaded")
-            text = page.inner_text("body")
-            return text if text else ""
+            return page.inner_text("body") or ""
         except Exception:
             return ""
         finally:
             page.close()
 
     @classmethod
-    def fetch_with_retry(cls, url: str, timeout: int = 30000) -> str:
-        """多源尝试抓取"""
-        result = cls.fetch_text(url, timeout)
-        if len(result) > 100:
-            return result
-        return ""
+    def search(cls, keyword: str, site: str = "indeed") -> str:
+        """搜索岗位，返回页面文本"""
+        urls = {
+            "indeed": f"https://www.indeed.com/jobs?q={keyword}&limit=10",
+            "liepin": f"https://www.liepin.com/zhaopin/?key={keyword}",
+        }
+        url = urls.get(site, urls["indeed"])
+        return cls.open(url)
 
     @classmethod
     def close(cls):

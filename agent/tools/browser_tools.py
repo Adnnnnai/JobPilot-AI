@@ -1,33 +1,38 @@
 """
 Browser Tool
 
-Agent 可调用的浏览器工具。
-- search_jd(keyword)  → 搜索岗位 JD（优先抓取，抓不到则 LLM 生成）
-- fetch_page(url)     → 抓取任意网页
+三层协作:
+  BrowserService  → 浏览器操作（打开页面、搜索）
+  JDExtractor     → HTML → 结构化 JSON
+  JDGenerator     → LLM 兜底生成 JD
 """
-from .base_tool import BaseTool
-from .browser.manager import BrowserManager
+import json
 
+from .base_tool import BaseTool
+from .browser.browser_service import BrowserService
+
+from app.services.jd_extractor import JDExtractor
 from app.services.jd_generator import JDGenerator
 
 
 class BrowserSearchTool(BaseTool):
 
     name = "browser_search"
-    description = "搜索岗位JD：优先从招聘网站抓取，失败则LLM生成标准模板"
+    description = "搜索岗位JD：浏览器抓取 + LLM 解析为结构化 JSON"
 
-    def run(self, keyword: str, source: str = "indeed"):
-        # 1. 尝试浏览器抓取
-        scraped = BrowserManager.fetch_text(
-            f"https://www.indeed.com/jobs?q={keyword}&limit=5",
-            timeout=15000
-        )
-        if scraped and len(scraped) > 200:
-            return scraped
+    def run(self, keyword: str, site: str = "indeed") -> str:
+        # 1. BrowserService: 浏览器抓取
+        html_text = BrowserService.search(keyword, site=site)
 
-        # 2. 回退到 LLM 生成 JD 模板
+        # 2. JDExtractor: HTML → 结构化 JSON
+        if html_text and len(html_text) > 200:
+            jd = JDExtractor.extract(html_text)
+            if jd.get("title"):
+                return json.dumps(jd, ensure_ascii=False, indent=2)
+
+        # 3. JDGenerator: LLM 兜底
         jd = JDGenerator.generate(keyword)
-        return f"JD模板（LLM生成）:\n{jd}"
+        return json.dumps(jd, ensure_ascii=False, indent=2)
 
 
 class BrowserFetchTool(BaseTool):
@@ -35,5 +40,5 @@ class BrowserFetchTool(BaseTool):
     name = "browser_fetch"
     description = "抓取网页内容：获取任意网页的文本内容"
 
-    def run(self, url: str):
-        return BrowserManager.fetch_text(url)
+    def run(self, url: str) -> str:
+        return BrowserService.open(url)
