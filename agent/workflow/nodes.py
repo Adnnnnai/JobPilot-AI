@@ -1,16 +1,15 @@
 """
 多 Agent 协作 Nodes
 
-START → Planner → Supervisor → Worker → task_complete → next_task → END
-
-职责链：
-- Planner:   LLM 理解用户意图 → 输出 TaskPlan(tasks 列表)
-- Supervisor: 读取 task_plan → 按依赖顺序路由到对应 Worker
-- Worker:     执行具体任务（resume/jd/rewrite/interview/filesystem/github）
+简化的任务执行流程：
+- Planner:    规则引擎输出 TaskPlan
+- Supervisor: 调度路由
+- Workers:    执行任务 (resume/jd/rewrite/interview/browser)
 """
 import json
 import sys
 import os
+import traceback
 
 from langgraph.types import interrupt
 
@@ -37,34 +36,35 @@ _interview = InterviewAgent()
 
 def load_memory_node(state):
     """Workflow 开始时加载长期记忆"""
-    from memory.manager import MemoryManager
-    from memory.strategy import MemoryStrategy
-
-    memory = MemoryManager.load(1)
-    state["profile"] = memory["profile"]
-    state["preferences"] = memory["preferences"]
-    state["experiences"] = memory["experiences"]
-
-    # 从消息中提取即时偏好
-    msg = state.get("message", "")
-    if msg and MemoryStrategy.should_save(msg):
-        new_prefs = MemoryStrategy.extract_preferences(msg)
-        existing_prefs = state.get("preferences", {})
-        existing_prefs.update(new_prefs)
-        state["preferences"] = existing_prefs
-
+    try:
+        from memory.manager import MemoryManager
+        from memory.strategy import MemoryStrategy
+        memory_data = MemoryManager.load(1)
+        state["profile"] = memory_data.get("profile", {})
+        state["preferences"] = memory_data.get("preferences", {})
+        state["experiences"] = memory_data.get("experiences", [])
+        msg = state.get("message", "")
+        if msg and MemoryStrategy.should_save(msg):
+            new_prefs = MemoryStrategy.extract_preferences(msg)
+            existing_prefs = state.get("preferences", {})
+            existing_prefs.update(new_prefs)
+            state["preferences"] = existing_prefs
+    except Exception as e:
+        print(f"[load_memory] Warning: {e}", flush=True)
+    state["current_agent"] = "load_memory"
     return state
 
 
 def save_memory_node(state):
     """Workflow 结束时保存有价值的记忆"""
-    from memory.manager import MemoryManager
-    from memory.strategy import MemoryStrategy
-
-    msg = state.get("message", "")
-    if msg and MemoryStrategy.should_save(msg):
-        MemoryManager.save(state, user_id=1)
-
+    try:
+        from memory.manager import MemoryManager
+        from memory.strategy import MemoryStrategy
+        msg = state.get("message", "")
+        if msg and MemoryStrategy.should_save(msg):
+            MemoryManager.save(state, user_id=1)
+    except Exception as e:
+        print(f"[save_memory] Warning: {e}", flush=True)
     state["current_agent"] = "save_memory"
     return state
 
@@ -72,38 +72,26 @@ def save_memory_node(state):
 # ── Planner Node ─────────────────────────────
 
 def planner_node(state):
-    """LLM 分析用户意图，输出 TaskPlan。注入用户画像和偏好。"""
+    """基于关键词规则分析用户意图，输出 TaskPlan。"""
     if state.get("task_plan"):
         return state
-
     if state.get("approved"):
         return state
 
-    planner = PlannerAgent()
-
-    # 异常恢复：如果有失败任务，重新规划
-    failed = state.get("failed_tasks", [])
-    if failed:
-        failed_names = [t.get("name", "unknown") for t in failed]
-        retry_message = f"之前以下任务失败了：{failed_names}。请重新规划。原始消息：{state.get('message', '')}"
+    msg = state.get("message", "")
+    try:
         plan = PlannerAgent.plan(
-            retry_message,
+            msg,
             profile=state.get("profile", {}),
             preferences=state.get("preferences", {}),
         )
         state["task_plan"] = plan.model_dump()["tasks"]
-        state["failed_tasks"] = []
-        state["current_agent"] = "planner"
-        return state
+    except Exception as e:
+        print(f"[planner] Error: {e}", flush=True)
+        # fallback: 至少解析简历
+        state["task_plan"] = [{"id": 1, "name": "parse_resume", "description": "解析简历", "depends": [], "agent": "resume_agent"}]
 
-    plan = PlannerAgent.plan(
-        state.get("message", ""),
-        profile=state.get("profile", {}),
-        preferences=state.get("preferences", {}),
-    )
-    state["task_plan"] = plan.model_dump()["tasks"]
     state["current_agent"] = "planner"
-
     return state
 
 
@@ -121,18 +109,22 @@ def supervisor_node(state):
 # ── Browser Node ─────────────────────────────
 
 def browser_search_node(state):
-    """抓取 JD：从招聘网站搜索岗位，只做采集和存储，不做分析"""
-    from tools.browser_tools import BrowserSearchTool
-
-    keyword = state.get("jd", state.get("message", ""))
-    tool = BrowserSearchTool()
-    result = tool.run(keyword)
-    state["jd"] = result
+    """用 LLM 生成 JD 并存储"""
     state["current_agent"] = "browser_search"
+    try:
+        from tools.browser_tools import BrowserSearchTool
+        keyword = state.get("jd", state.get("message", ""))
+        tool = BrowserSearchTool()
+        result = tool.run(keyword)
+        state["jd"] = result
 
-    from workflow.browser_worker import index_jd_to_knowledge
-    state = index_jd_to_knowledge(state)
-
+        try:
+            from workflow.browser_worker import index_jd_to_knowledge
+            state = index_jd_to_knowledge(state)
+        except Exception:
+            pass
+    except Exception as e:
+        print(f"[browser_search] Error: {e}", flush=True)
     return state
 
 
@@ -140,63 +132,83 @@ def browser_search_node(state):
 
 def resume_worker_node(state):
     state["current_agent"] = "resume_agent"
-    # 如果 task_plan 中有 parse_resume 且未被跳过，执行解析
-    if not state.get("resume_json"):
-        state = _resume.run(state)
+    try:
+        if not state.get("resume_json"):
+            state = _resume.run(state)
+    except Exception as e:
+        print(f"[resume_worker] Error: {e}\n{traceback.format_exc()}", flush=True)
     return state
 
 
 def jd_worker_node(state):
     state["current_agent"] = "jd_agent"
-    state = _jd.run(state)
+    try:
+        state = _jd.run(state)
+    except Exception as e:
+        print(f"[jd_worker] Error: {e}\n{traceback.format_exc()}", flush=True)
     return state
 
 
 def rewrite_plan_node(state):
     state["current_agent"] = "rewrite_agent"
-    state = _rewrite.plan(state)
-
-    if not state.get("approved"):
-        interrupt({
-            "type": "approval",
-            "message": "请确认修改计划",
-            "plan": state.get("rewrite_plan", {}),
-        })
-
+    try:
+        state = _rewrite.plan(state)
+        if not state.get("approved"):
+            interrupt({
+                "type": "approval",
+                "message": "请确认修改计划",
+                "plan": state.get("rewrite_plan", {}),
+            })
+    except Exception as e:
+        print(f"[rewrite_plan] Error: {e}\n{traceback.format_exc()}", flush=True)
     return state
 
 
 def rewrite_execute_node(state):
     state["current_agent"] = "rewrite_agent"
-    state = _rewrite.execute(state)
+    try:
+        state = _rewrite.execute(state)
+    except Exception as e:
+        print(f"[rewrite_execute] Error: {e}\n{traceback.format_exc()}", flush=True)
     return state
 
 
 def interview_worker_node(state):
     state["current_agent"] = "interview_agent"
-    state = _interview.run(state)
+    try:
+        state = _interview.run(state)
+    except Exception as e:
+        print(f"[interview_worker] Error: {e}\n{traceback.format_exc()}", flush=True)
     return state
 
 
-# ── MCP Nodes ────────────────────────────────
+# ── Filesystem / GitHub ──────────────────────
 
 def filesystem_node(state):
-    from tools.mcp_tools import read_file_sync, list_directory_sync
-
-    path = state.get("filesystem_path", "")
-    if not path:
-        state["filesystem_result"] = []
-        return state
-
+    """Filesystem Worker: 搜索/操作本地文件"""
+    state["current_agent"] = "filesystem_agent"
     try:
-        entries = list_directory_sync(path)
-        state["filesystem_result"] = entries
+        from tools.filesystem_tool import FilesystemTool
+        from memory.strategy import MemoryStrategy
+        tool = FilesystemTool()
+        keyword = state.get("message", "")
+        path = state.get("filesystem_path", "")
+        result = tool.search(keyword, path)
+        state["filesystem_result"] = result or []
+        if result and MemoryStrategy.should_save(keyword):
+            from memory.manager import MemoryManager
+            MemoryManager.save(state, user_id=1)
     except Exception as e:
-        state["filesystem_result"] = [f"[MCP Error] {e}"]
-
+        print(f"[filesystem] Error: {e}", flush=True)
     return state
 
 
 def github_node(state):
-    state["github_result"] = {"status": "github mcp not yet configured"}
+    """GitHub Worker: 搜索开源项目/代码"""
+    state["current_agent"] = "github_agent"
+    try:
+        from tools.github_tool import GitHubTool
+        state["github_result"] = GitHubTool.search(state.get("message", ""))
+    except Exception as e:
+        print(f"[github] Error: {e}", flush=True)
     return state

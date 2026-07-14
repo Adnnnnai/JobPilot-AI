@@ -4,7 +4,7 @@
 START → Planner → Supervisor → Workers → task_complete → END
 
 Supervisor+Worker 模式：
-- Planner:    LLM 输出 TaskPlan
+- Planner:    规则引擎 输出 TaskPlan
 - Supervisor: 轻量调度，根据 Executor 的依赖检查路由
 - Workers:    执行具体任务
 """

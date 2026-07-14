@@ -21,16 +21,14 @@
     ]
 }
 
-规则：
-- 根据用户偏好(Preferences)调整任务：如果用户设置了 avoid_skill，请告知 jd_agent 过滤
-- 根据用户画像(Profile)调整任务：使用 target_job 作为默认岗位
-- 用户提到"搜索/找/查/浏览"某个岗位时，需要 browser_agent（采集JD）
-- browser_agent 必须在 jd_agent 之前（先采集再分析）
-- id 从 1 递增，每个 Agent 一次任务只生成一个
-- depends 是依赖的任务 id 列表，无依赖则为 []
-- resume_agent 和 jd_agent 无相互依赖（可并行）
-- 有"优化/润色"意图时，rewrite_agent 必须在 resume_agent 之后
-- 有"面试"意图时，interview_agent 在最后
-- 如果用户只说了"优化简历"，只需要 resume_agent + rewrite_agent
-- 如果只说了"分析岗位"，只需要 jd_agent
-- 不要生成用户明确不希望的任务（如 avoid_skill=Java 则不匹配 Java 岗位）
+CRITICAL RULES:
+1. tasks 里的 depends 只能引用同一个 tasks 列表中其他任务的 id！如果你依赖 id=1 和 id=2，那么 id=1 和 id=2 必须存在！
+2. id 从 1 开始连续递增，不要跳过
+3. 如果用户说"搜索/找/查/浏览"岗位 → 必须包含 browser_agent，且 id=1
+4. browser_agent 和 resume_agent 无依赖（可并行），jd_agent 在 browser_agent 之后
+5. resume_agent 和 jd_agent 无相互依赖（可并行）
+6. 有"优化/润色" → resume_agent + rewrite_agent，rewrite 依赖 resume
+7. 有"匹配" → resume_agent + jd_agent
+8. 有"面试" → interview_agent，且放在最后
+9. 只生成用户意图需要的 Agent，不要多余
+10. 用户画像中的 target_job 作为默认岗位，偏好中的 avoid_skill 要告知 jd_agent 过滤
